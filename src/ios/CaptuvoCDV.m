@@ -1,3 +1,4 @@
+
 #import "CaptuvoCDV.h"
 
 
@@ -58,6 +59,8 @@
     CDVPluginResult *result = [CDVPluginResult
                                resultWithStatus:CDVCommandStatus_OK
                                messageAsString:data];
+    
+    [result setKeepCallbackAsBool:YES];
     
     [self.commandDelegate sendPluginResult:result callbackId:self.scannerCallbackId];
 }
@@ -138,6 +141,8 @@
                                resultWithStatus: status ? CDVCommandStatus_OK : CDVCommandStatus_ERROR
                                messageAsString:data];
     
+    [result setKeepCallbackAsBool:YES];
+    
     [self.commandDelegate sendPluginResult:result callbackId:self.msrCallbackId];
 }
 -(void)msrReady{
@@ -162,6 +167,8 @@
         CDVPluginResult *result = [CDVPluginResult
                                    resultWithStatus: didRead ? CDVCommandStatus_OK : CDVCommandStatus_ERROR
                                    messageAsInt:status];
+        
+        [result setKeepCallbackAsBool:YES];
         
         [self.commandDelegate sendPluginResult:result callbackId:self.batteryCallbackId];
     }
