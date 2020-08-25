@@ -2,10 +2,10 @@
   "version": "0.1.0",
   "name": "CaptuvoCDV",
   "cordova_name": "CaptuvoCDV",
-  "description": "Honeywell Captuvo Cordova plugin",
+  "description": "Honeywell Captuvo Cordova plugin for S62",
   "license": "MIT",
-  "repo": "https://github.com/BlueFletch/cordova-plugin-honeywell-captuvo.git",
-  "issue": "https://github.com/BlueFletch/cordova-plugin-honeywell-captuvo/issues",
+  "repo": "https://github.com/mopi1402/cordova-plugin-honeywell-captuvo.git",
+  "issue": "https://github.com/mopi1402/cordova-plugin-honeywell-captuvo/issues",
   "keywords": [
     "captuvo",
     "magstripe",

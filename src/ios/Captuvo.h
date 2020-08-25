@@ -2,12 +2,14 @@
 //  Captuvo.h
 //  Honeywell_SDK
 //
-//  Created by Edward Finegan (edward@dryraintechnologies.com) on 5/20/12.
-//
+//  Copyright (c) 2015 Honeywell Inc. All rights reserved.
 
 #import <UIKit/UIKit.h>
 #import <ExternalAccessory/ExternalAccessory.h>
 
+#define HONEYWELL_DEPRECATED_CAPTUVO(Captuvo_version) __attribute__((deprecated)) //_Captuvo_version Captuvo sled product version.
+
+#define HONEYWELL_AVAILABLE_CAPTUVO(_version) __attribute__((noreturn)) //_version new API in release version.
 
 #pragma mark -
 #pragma mark Data Types
@@ -19,14 +21,16 @@ typedef enum {
    ProtocolConnectionStatusConnected,                                   /**< A successful connection was made */
    ProtocolConnectionStatusAlreadyConnected,                            /**< The protocol is already connected */
    ProtocolConnectionStatusBatteryDepleted,                             /**< The protocol is unable to be connected due to low battery */
-   ProtocolConnectionStatusUnableToConnectIncompatiableSledFirmware,    /**< The protocol was unable to be connected due to an error */
+   ProtocolConnectionStatusUnableToConnectIncompatibleSledFirmware,    /**< The protocol was unable to be connected due to an error */
    ProtocolConnectionStatusUnableToConnect,                             /**< The protocol was unable to be connected due to an error */
+   ProtocolConnectionUnableToConnectNOAccessary,               /**< Protocol connection fail, the Sled was not connected to apple device */
+   ProtocolConnectionUnableToConnectNOProtocal,                /**<does not recognize the specified protocol or there was no corressponding Protocal defined in plist or there was an error communicating with the SLed.*/
 } ProtocolConnectionStatus;
 
 
 
 /*
- @brief Enumeration for HID status
+ @brief Enumeration for current device's decoder HID status
  */
 typedef enum {
 
@@ -112,6 +116,28 @@ typedef enum{
    SecurityLevel4,
    SecurityLevelUndefined
 }SecurityLevel;
+
+/*
+ @brief Enumeration key management type
+ */
+typedef enum {
+    Fixkeymanagement,
+    DUKPTkeymanagement
+}KeyManagementType;
+/*
+ @brief Enumeration Encryption Settings.
+ <STX><S><4Ch><01h><Encryption Settings><ETX><CheckSum>
+ Encryption Settings:
+ "0" Encryption Disabled
+ "1" Enable TDES Encryption
+ "2" Enable AES Encryption(Not for Raw Data Decoding in Both Directions, send out in other mode.)
+ */
+typedef enum {
+    EncryptionDisabled,
+    EnableTDESEncryption,
+    EnableAESEncryption
+}EncryptionSetting;
+
 
 /**
  @brief Enumeration for selecting symbologies
@@ -200,6 +226,36 @@ typedef enum {
    BatteryStatusUndefined                    /**< Unable to determine the battery level */
 } BatteryStatus;
 
+/**
+ @brief Enumeration for the Trigger Key status
+ */
+typedef enum
+{
+
+  TriggerKeyStatusEnabled,                    /**< Trigger Key enabled*/
+  TriggerKeyStatusDisabled,                   /**< Trigger Key disabled*/
+  TriggerKeyStatusChangeSuccessful,           /**< Toggle command successfully executed */
+  TriggerKeyStatusChangeFailed,               /**< Toggle command unsuccessfully executed */
+  TriggerKeyStatusToggleFeatureUnsupported    /**< Toggle Feature not supported in Firmware */
+
+}TriggerKeyStatus;
+
+/**
+ @brief Enumeration for Upgrade frimware result code
+ */
+typedef enum {
+    
+    StartSuccessfully = 0,
+    SledReadyUpgrade,
+    FilePathError,
+    FileReadError,
+    SecurityError,
+    FWPacketError,
+    FWUpgradeError,
+    SLEDBatteryTooLowToUpgrade
+} UPfirmwareResultCode;
+
+
 #pragma mark -
 #pragma mark Symbology Configuration Objects
 
@@ -227,6 +283,29 @@ typedef struct
     Byte odmTrackingNumber[8];
 
 } MfgBlockData;
+
+/*
+ Sled firmware header struct contain version information, size of firmware file, version, firmware type, build firmware date, time.
+ The firmware file header start address 0x26c
+ 
+ unsigned short ver;            // Version information indicator, always KEYBRD_INFO_BASE(2 Bytes)
+ unsigned char size;            // Size in bytes of this structure, always 0x34 byte (1 Byte)
+ unsigned char version[16];     // 63.00.NB.r49 (16 Bytes)
+ unsigned char type;            // Type of firmware: valid value 'b'/'m'/'u'(1 Byte)
+ unsigned char date[16];        // eg."May 14 2004" (16 Bytes)
+ unsigned char time[16];        // eg."18:00:00" (16 Bytes)
+ Above 16X3 + 2 + 1 + 1 = 52, length of header is 52
+ */
+@interface SledFirmwareHeader : NSObject
+
+@property (assign,nonatomic) NSInteger ver;             // Version information indicator, always KEYBRD_INFO_BASE
+@property (assign,nonatomic) NSInteger size;            // Size in bytes of this structure, always 0x34 byte
+@property (strong,nonatomic) NSString* version;         // 63.00.NB.r49
+@property (strong,nonatomic) NSString* type;            // Type of firmware: valid value 'b'/'m'/'u'
+@property (strong,nonatomic) NSString* date;            // eg."May 14 2004"
+@property (strong,nonatomic) NSString* time;            // eg."18:00:00"
+
+@end
 
 
 /**
@@ -688,8 +767,75 @@ typedef enum {
 
 @end
 
+
+/*
+ @brief cupertinoBatteryCharger is the object used to setting Cupertino battery charging for Apple device
+ 1.enable, Cupertino can charge for Apple device. enable=NO, Cupertino can NOT charge for Apple device(YES/NO).
+ 2.start: it means Apple device battery percentage is lower than "start" value, Cupertino battery start charging for Apple device(%).
+ 3.stop: it means Apple device battery percentage is higher than "stop" value, Cupertino battery stop charging for Apple device(%).
+ 4.sledminLimitPower: it means Cupertino battery percentage is too low to charging for Apple device(%).
+ */
+@interface cupertinoBatteryCharger : NSObject
+@property (nonatomic,assign) BOOL enable;
+@property (nonatomic,assign) UInt8 start;
+@property (nonatomic,assign) UInt8 stop;
+@property (nonatomic,assign) UInt8 sledminLimitPower;
+@end
+
+/*
+ @brief cupertinoBatteryDetailInfo is the object which include the Cupertino battery detail information
+ Valid data:-provide if the Cupertino battery is valid or not(YES/NO).
+ Percentage:-provide the current Cupertino battery percentage(%).
+ Remaining Capacity mAh:-provide the Cupertino battery current remaining capacity(mAh).
+ Total Capacity mAh:-provide the Cupertino battery total capacity(mAh).
+ Temperture:-provide the Cupertino battery temperure use Kelvin(K).
+ Voltage:-provide the Cupertino battery current voltage(V).
+ */
+@interface cupertinoBatteryDetailInfo : NSObject
+@property (nonatomic,assign) BOOL valid ;
+@property (nonatomic,assign) UInt16 percentage ;
+@property (nonatomic,assign) UInt16 remainCapacity;
+@property (nonatomic,assign) UInt16 totalCapacity;
+@property (nonatomic,assign) CGFloat temperture ;
+@property (nonatomic,assign) CGFloat voltage ;
+@end
+
+/*
+ @brief cupertinoBatteryChargingInfo is the object which is the Cupertino device with external power related.
+ isExternalPowerPlugin:-Cupertino has been plugined by external power or not(YES/NO).
+ isChargingforCupertino: -External pwer charging for Cupertino or not(YES/NO).
+ //isChargingforAppledevice:-Cupertino is charging for Apple device or not. this property is too confuse user that want to remove it(YES/NO).
+ reserved: -This byte reserved, that will be used(YES/NO).
+ */
+@interface cupertinoBatteryChargingInfo : NSObject
+@property (nonatomic,assign)BOOL isExternalPowerPlugin;
+@property (nonatomic,assign)BOOL isChargingforCupertino;
+//@property (nonatomic,assign)BOOL isChargingforAppledevice;
+@property (nonatomic,assign)BOOL reserved;
+@end
+
+
+/*
+ @brief LedSchemeResponse is the object which include the Led scheme configuration response info
+ LedScheme:-provide two scheme that can be used.
+ scheme:-  which scheme are trying to configure
+ bConfigSuccess- indicate whether or not configure successfully
+ */
+
+@interface LedSchemeResponse : NSObject
+
+typedef enum {
+    DefaultLedScheme,
+    AlternateLedScheme
+} LedScheme;
+
+@property (nonatomic,assign) BOOL bConfigSuccess ;
+@property (nonatomic,assign) LedScheme scheme ;
+
+@end
+
 #pragma mark -
-#pragma mark Event Protocol
+#pragma mark CaptuvoSDK provided All the Protocol Events
 /**
  @brief The protocol that must be implemented to become a SDK delegate.
 
@@ -724,6 +870,7 @@ typedef enum {
  */
 - (void)pmReady ;
 
+#pragma mark decoder delegates
 /**
  @brief This delegate method is called when the decoder read string data from a barcode.
 
@@ -775,6 +922,16 @@ typedef enum {
  @param (NSString*)The decoder serial number.
  */
 -(void)decoderSerialNumber:(NSString*)seralNumber;//
+
+
+/**
+ @brief This delegate method is called when the decoder driver revision is requested.
+ 
+ The delegate message passes the engine serial number data from the <em>-(void)requestEngineSerialNumber</em> method. This engine serial number is for the engine serial number of the device.
+ 
+ @param (NSString*)The decoder serial number.
+ */
+-(void)EngineSerialNumber:(NSString*)seralNumber;
 
 /**
  @brief This delegate method is called when the status of the beep for a good read is requested.
@@ -984,7 +1141,13 @@ typedef enum {
 -(void)DecoderEnhancedManualTriggerMode:(NSData*)data;
 
 
-//MSR Delegates
+/*
+  @brief This delegate method is called when call enableTriggerKey or disableTriggerKey to enable/disable trigger key.
+ 
+ The delegate message passes response data from the use of the <em>enableTriggerKey/em> method or <em>disableTriggerKey/em> method */
+-(void)triggerKey:(TriggerKeyStatus)status;
+
+#pragma mark MSR Delegates
 
 /**
  @brief This delegate method is called when the MSR has data to send to its delegates from a card swipe.
@@ -1055,7 +1218,7 @@ typedef enum {
  */
 -(void)msrPassThroughReturnData:(NSData*)data;
 
-//PM Delegates
+#pragma mark PM Delegates
 
 /**
  @brief This delegate method is called when their is a change in the status of the battery charging state.
@@ -1095,7 +1258,7 @@ typedef enum {
 /**
  @brief This delegate method is called when data is returned from unsing the direct read Captuvo part number&Configure number&Serial Number.
 
- The delegate message passes repsonse data from the use of the <em>requestPMMfgBlockData method. The data received from this method is directly returned as a MfgBlockData enum.
+ The delegate message passes response data from the use of the <em>requestPMMfgBlockData method. The data received from this method is directly returned as a MfgBlockData enum.
 
  @param (MfgBlockData*)data The enum data from the Configuration of Munifactor.
  */
@@ -1103,38 +1266,113 @@ typedef enum {
 -(void)pmMfgBlockData:(MfgBlockData*)blockData;
 
 
-
 /**
- @brief This delegate method is called when data is returned from unsing the direct read Captuvo part current update firmware data steps.
+ @brief This delegate method is called when Captuvo device's decoder enter into HID(Human Interface Device) mode, and Captuvo' left/right hard scan key is pressed.
 
- This method when enables firmware, can call.
+ The delegate message passes the response status of hard scan key's press in Captuvo HID mode. It is required the methods <am>-(void) unLockHIDMode</em> AND
+ <em>-(void)activateHID</em> are all called.
 
- @param (NSData*) data response when update firmware data process from Captuvo, received data and parser which type.
- */
-
--(void)upFirmware:(NSData*)data;
-
-
-
-
-/**
- @brief This method is used to get the current HID status.
-
- This can be called to get the current status of the HID
-
- @return HIDCurStatus The status of the HID.
+ @param (HIDCurStatus)status The state of the Human Interface Device.
  */
 -(void)stateHID:(HIDCurStatus)status ;
 
+/**
+ @brief This delegate method is called to query the Captuvo(iPhone 6/6Plus) device's decoder enter into HID(Human Interface Device) mode time out value, when use hasn't any action timeout, the Sled will automatic enter into save power mode(decoder will closed).
+ 
+ The delegate message passes the response when It is required the methods <em>- (void)queryHIDTimeout;</em> was called.
+ 
+ @param (timeout)value is the state of the Human Interface Device timeout value.
+ */
+- (void)responseHIDTimeout:(NSInteger)timeout ;
 
 /**
- @brief This method is used to get the current current user tap left/right hardkey action.
+ @brief This delegate method is called to set the Captuvo(iPhone 6/6Plus) device's decoder enter into HID(Human Interface Device) mode time out value, this delegate will notificate to user the setting status is success/fail.
+ 
+ The delegate message passed the response when it is setting HID timeout methods <em>- (int)setHIDTimeout:(int)timeout ;</em> was called.
+ 
+ @param (changedInfo)value is the success or fail of the changed Human Interface Device timeout.
+ */
+- (void)responseHIDChangedDetail:(NSString*)changedInfo;
 
- This can be called to get the current status of the HardKey event
+/**
+ @brief This delegate method is called when Captuvo hard scan keys is pressed.
 
- @return ScanKeyStatus The status of the ScanKey(Pressed/Release).
+ The delegate message pass response the status of hard scan key's press. It is required the methods <am>-(ProtocolConnectionStatus) startDecoderHardware</em> OR
+ <em>- (void)startDecoderHardware:(double)timeout</em> AND <em>-(ProtocolConnectionStatus)startPMHardware</em> OR <em>-(void)startPMHardware:(double)timeout</em>
+ Called, should opened decoder hardware and power management hardware the same time.
+
+ @param (ScanKeyStatus)status The status of the Captuvo Scan hard Key(Pressing/Release).
  */
 - (void)scanKeyAction:(ScanKeyStatus)status ;
+
+
+
+/**
+ @brief This method for iOS device UPGRADE FIRMWARE return result.
+
+ iOS device will received upgrade firmware process result, this event should register in uplayer application.
+
+ It is required the method <am>- (void)startUpgradefirmware: (NSString*) filePath</em>, the means the iSled is monitor the upgrade firmware process result.
+
+ */
+
+- (void)upgradingFirmwareResult:(UPfirmwareResultCode)ResultCode;
+
+/**
+ @brief This method for iOS device UPGRADE FIRMWARE data to sled current percent.
+
+ For Captuvo (iSled V2)-
+ iOS device uses this method to transfer data with piece by piece to  Captuvo V2 (SL22/SL42/SL62), normally it needs about 10~15seconds. The firmware file 65Kb size. So this delegate method will call many times.
+
+ For Cupertino (iSled V3)-
+
+ iOS device uses this method transfer 65Kb size data to  Cupertino V3 (SL22/SL42/SL62), normally it needs about 5/6 second. The firmware file 65Kb size. This delegate method will be call very short, almost once a time is over.
+
+ It is required the method <am>- (void)startUpgradefirmware: (NSString*) filePath</em>, the upgrade firmware progress percent.
+ */
+
+- (void) upgradePercent: (CGFloat) percent;
+
+
+/**
+ @brief This method for iOS device UPGRADE FIRMWARE completed.
+
+ After the upgrade all the firmware data completed, this method will be called. It is require by steps method as below:
+ <em>- (void)startUpgradefirmware:(NSString*)filePath</em>
+
+ When all data passed to island completed this method will be called.
+
+ */
+
+- (void)upgradeFirmwareCompleted;
+
+
+/**
+ @brief This method is response delegate method for query battery detail information.
+ Valid data:-provide if the Cupertino battery is valid or not(YES/NO).
+ Percentage:-provide the current Cupertino battery percentage(%).
+ Remaining Capacity mAh:-provide the Cupertino battery current remaining capacity(mAh).
+ Total Capacity mAh:-provide the Cupertino battery total capacity(mAh).
+ Temperture:-provide the Cupertino battery temperure(K).
+ Voltage:-provide the Cupertino battery current voltage(V).
+ 
+ When battery protocol ready, It is required by the method as below:<em>-(void) queryBatteryDetailInfo</em> this delegate method will be called
+ */
+-(void) responseBatteryDetailInformation:(cupertinoBatteryDetailInfo*)batteryInfo HONEYWELL_AVAILABLE_CAPTUVO(3.01);
+
+
+/**
+ @brief This method is response delegate method for query MSR HID Mode.
+ When Cupertino sled current MSR HID is activate, the delegate method response isHID = YES, else the isHID = NO.
+ */
+- (void)responseMSRHIDMode:(BOOL)isHID HONEYWELL_AVAILABLE_CAPTUVO(3.01);
+
+/**
+ @brief This method is response delegate method for setLedScheme.
+ When invoking setLedScheme, the delegate method response, for more details of LedSchemeResponse,please see the defination of LedSchemeResponse
+ */
+
+-(void)responseLedScheme:(LedSchemeResponse*) status HONEYWELL_AVAILABLE_CAPTUVO(3.01);
 @end
 
 
@@ -1144,7 +1382,7 @@ typedef enum {
 /**
  @brief Main public interface for the Captuvo SDK Library.
 
- This should be included in all projects that intend to use the Honeywell Captuvo sled. All methods in this SDK should be assumed to not be thread safe. The ExternalAccessory.framework
+ This should be included in all projects that intend to use the Honeywell Captuvo sled. All methods in this SDK should be assumed to not be thread safe. The External Accessory. framework
  */
 @interface Captuvo : NSObject
 
@@ -1315,7 +1553,7 @@ typedef enum {
 /**
  @brief This method is used to turn off the decoder hardware in the device.
 
- Once this method is called the decoder hardware is inactivated. No scanning methods can be called untill <em>-(void)startDecoderHardware</em> is called again to re-initialize the decoder hardware
+ Once this method is called the decoder hardware is inactivated. No scanning methods can be called until <em>-(void) startDecoderHardware</em> is called again to re-initialize the decoder hardware
  */
 -(void)stopDecoderHardware;//
 
@@ -1784,7 +2022,7 @@ typedef enum {
  */
 -(void)enableDecoderAimer:(BOOL)persist;
 /**
- @brief This method disable the aimer.
+ @brief This method disables the aimer.
 
  This method is used to disable the aimer.
 
@@ -1942,8 +2180,8 @@ typedef enum {
 
  This method is used to configure the Code 11 symbology. A Code11 object is used to hold the configuration options.
 
- @param (Code11*)code11 A Code11 object with the settings desired for this symbology.
- @param (BOOL)persist Set to YES to save the setting between power cycles.
+ @param (Code11*) code11 A Code11 object with the settings desired for this symbology.
+ @param (BOOL) persist Set to YES to save the setting between power cycles.
  */
 -(void)setDecoderCode11Configuration:(Code11*)code11 persistSetting:(BOOL)persist;
 
@@ -1993,17 +2231,17 @@ typedef enum {
  This method is used to configure the GS1 DataBar Omnidirectional symbology. A GS1DataBarOmnidirectional object is used to hold the configuration options.
 
  @param (GS1DataBarOmnidirectional*)gs1DataBarOmnidirectional A GS1DataBarOmnidirectional object with the settings desired for this symbology.
- @param (BOOL)persist Set to YES to save the setting between power cycles.
+ @param (BOOL) persist Set to YES to save the setting between power cycles.
  */
--(void)setDecoderGS1DataBarOmnidirectionalConfiguration:(GS1DataBarOmnidirectional*)gs1DataBarOmnidirectional persistSetting:(BOOL)persist;
+-(void) setDecoderGS1DataBarOmnidirectionalConfiguration: (GS1DataBarOmnidirectional*) gs1DataBarOmnidirectional persistSetting: (BOOL)persist;
 
 /**
  @brief This method is used to configure the GS1 DataBar Limited symbology.
 
  This method is used to configure the GS1 DataBar Limited symbology. A GS1DataBarLimited object is used to hold the configuration options.
 
- @param (GS1DataBarLimited*)gs1DataBarLimited A GS1DataBarLimited object with the settings desired for this symbology.
- @param (BOOL)persist Set to YES to save the setting between power cycles.
+ @param (GS1DataBarLimited*) gs1DataBarLimited A GS1DataBarLimited object with the settings desired for this symbology.
+ @param (BOOL) persist Set to YES to save the setting between power cycles.
  */
 -(void)setDecoderGS1DataBarLimitedConfiguration:(GS1DataBarLimited*)gs1DataBarLimited persistSetting:(BOOL)persist;
 
@@ -2022,7 +2260,7 @@ typedef enum {
 
  This method is used to configure the Codablock A symbology. A CodablockA object is used to hold the configuration options.
 
- @param (CodablockA*)codablockA A CodablockA object with the settings desired for this symbology.
+ @param (CodablockA*) codablockA A CodablockA object with the settings desired for this symbology.
  @param (BOOL)persist Set to YES to save the setting between power cycles.
  */
 -(void)setDecoderCodablockAConfiguration:(CodablockA*)codablockA persistSetting:(BOOL)persist;
@@ -2032,8 +2270,8 @@ typedef enum {
 
  This method is used to configure the Codablock F symbology. A CodablockF object is used to hold the configuration options.
 
- @param (CodablockF*)codablockF A CodablockF object with the settings desired for this symbology.
- @param (BOOL)persist Set to YES to save the setting between power cycles.
+ @param (CodablockF*) codablockF A CodablockF object with the settings desired for this symbology.
+ @param (BOOL) persist Set to YES to save the setting between power cycles.
  */
 -(void)setDecoderCodablockFConfiguration:(CodablockF*)codablockF persistSetting:(BOOL)persist;
 
@@ -2125,13 +2363,21 @@ typedef enum {
  */
 -(void)requestDecoderSoftwareRevision;//
 
+
+/**
+ @brief This method requests the current engine serial number.
+ 
+ When this method is called to request the engine serial number of the device. 
+ */
+
+- (void)requestEngineSerialNumber;
 /**
  @brief This method is used to send data directly to the decoder.
 
  The data is directly sent without any manipulation of the SDK. The caller is responsible for formatting the message correctly, The caller of this method must indicate if they expect a return message.
 
  @param (NSData*) data at the NSData object that contains the raw data to send to the decoder.
- @param (BOOL)enabled A BOOL if YES the SDK will attempt to return a message from the decoder with the <em>-(void)decoderPassThroughReturnData:(NSData*)data</em> delegate method.
+ @param (BOOL) enabled A BOOL if YES the SDK will attempt to return a message from the decoder with the <em>-(void)decoderPassThroughReturnData:(NSData*)data</em> delegate method.
  */
 -(void)decoderPassThrough:(NSData*)data expectingReturnData:(BOOL)returnData;
 
@@ -2191,9 +2437,9 @@ typedef enum {
 -(void)enableMSRReader;//
 
 /**
- @brief This method places the MSR reader in an un-enabled state.
+ @brief This method places the MSR reader in a un-enabled state.
 
- When this method is called the MSR reader will be deactivated and will not read any data from cards when swiped.
+ When this method is called the MSR reader will be deactivated and will not read any data from the cards when swiped.
  */
 -(void)disableMSRReader;//
 
@@ -2207,7 +2453,7 @@ typedef enum {
 /**
  @brief This method requests the serial number from the MSR hardware.
 
- When this method is called a request is sent to the MSR hardware from its serial number. This data is returned with the <em>-(void)msrSerialNumber:(NSString*)data validData:(BOOL)status</em> delegate method.
+ When this method is called a request is sent to the MSR hardware from its serial number. This data is returned with the <em>-(void) msrSerialNumber: (NSString*) data validation: (BOOL) status</em> delegate method.
  */
 -(void)requestMSRSerialNumber;//
 
@@ -2240,7 +2486,7 @@ typedef enum {
  The data is directly sent without any manipulation of the SDK. The caller is responsible for formatting the message correctly and applying the correct checksum. The caller must also indicate if they expect a return message.
 
  @param (NSData*) data at the NSData object that contains the raw data to send to the MSR.
- @param (BOOL)enabled A BOOL if YES the SDK will attempt to return a message from the MSR with the <em>-(void)msrPassThroughReturnData:(NSData*)data</em> delegate method.
+ @param (BOOL) enabled A BOOL if YES the SDK will attempt to return a message from the MSR with the <em>-(void)msrPassThroughReturnData:(NSData*)data</em> delegate method.
  */
 -(void)msrPassThrough:(NSData*)data expectingReturnData:(BOOL)returnData;
 
@@ -2263,7 +2509,7 @@ typedef enum {
 
  @return BatteryStatus The current status of the battery.
  */
--(BatteryStatus)getBatteryStatus;//
+-(BatteryStatus)getBatteryStatus HONEYWELL_DEPRECATED_CAPTUVO(3.01); //
 
 #pragma mark -
 #pragma mark Mfg Block Data
@@ -2273,6 +2519,18 @@ typedef enum {
  When this method is called to request the current battery voltage of the device. This data is returned with the <em>-(void)pmBatteryVoltage:(float)voltage</em> delegate method. To track the battery status it is better to use the <em>-(BatteryStatus)requestBatteryStatus</em> method.
  */
 -(void)requestBatteryVoltage;
+
+
+/*
+@brief This method set the current battery threshold Min/Max voltage of the device.
+
+ When this method is called to set the threshold current battery voltage of the device. the Min voltage is the Captuvo(SLXX) device will charge battery for iOS devices(when it battery lower than Min voltage).
+ When iOS devices battery is higher than the Max voltage, which set threshold Max voltage value, the Captuvo(SLXX) will not charge battery for iOS devices any more.
+
+ When this method isn't called, Captuvo(SL42 Model A) will charging battery default, no matter the iOS devices' battery lower than Min voltage/Max voltage.
+
+*/
+-(void)setChargeBatteryThreshold:(int)min mx:(int)max ;
 
 
 /**
@@ -2291,77 +2549,256 @@ typedef enum {
 -(void)requestPMMfgBlockData;
 
 /**
- Start pm hardware
+ @brief This method start the current sled open power manager protocol.
+ 
+ When this method is called, sled's current battery status/battery voltage can be managerment.
  */
 -(ProtocolConnectionStatus)startPMHardware;
 
 /**
- Start pm hardware
+ @brief This method start the current sled open power manager protocol with timeout.
+ 
+ When this method is called, sled's current battery status/battery voltage can be managerment, this time out means wait for a few seconds to start.
  */
 -(void)startPMHardware:(double)timeout;
 
 /**
- Stop pm hardware
+ @brief This method stop the current sled to close power manager protocol.
+ 
+ When this method is called, sled's will close power manager protocol, uplayer application can NOT do battery operator.
  */
 -(void)stopPMHardware;
 
 
 /**
- Force shuts down when battery low.
+ @brief This method force sled do NOT working when the battery is too low to working.
+ 
+ When this method is called, sled will stop all protocols.
+ 
+ Waring:This method must cautious to use, it will stop all protocols between sled with iOS device
  */
--(void)forceBatteryLowShutdown;
+-(void)forceBatteryLowShutdown HONEYWELL_DEPRECATED_CAPTUVO(3.01);
 
 /**
- Debug status, return YES can debug, NO can not debug.
+ @brief This method set CaptuvoSDK enable debug.
+ 
+ When this method is called, note the CaptuvoSDK enable debug, since sled hardware reasons it can NOT debug.
  */
 -(BOOL)debug;
 
 
 /**
  Enable Query Battery
+ This method is send the apple devices battery value to SL22/SL42, when the battery is lower than setting value(the SL22/SL42 firmware configure threshold battery value), then the SL22/SL42 recognize the current apple devices
+ battery is low, the SL22/SL42 auto charging for apple devices
+
+ How to let SL22/SL42 charge battery for iPod/iPhone, should obay the following information:
+ SL22/SL42 will charge iPod/iPhone once all the following requirement met.
+ 1. SDK API enableBatteryQuery is called by iOS application, AND
+ 2. iPod/iPhone battery percentage <= 13%, AND
+ 3. iSled battery voltage >= 3.7V
+
+ The charging will stop once any of the following requirement met.
+ 1.SDK API disableBatteryQuery called by application, OR
+ 2.iPod/iPhone battery percentage >= 35%, OR
+ 3.SL22/SL42 battery voltage <= 3.4V
+ 4. Apple devices enter into suspend state.
+ the charging for iOS devices, should keep applications be running in the foreground for this to occur. If the iPod is suspended or the application moves to the background, the battery charging will stop.
+
  */
 - (void)enableBatteryQuery ;
 
 /**
  Disable Query Battery
+
+ When currently the SL22/SL42 is charging for iPod/iPhone, when called this method will stop charging.
+
+ The charging will stop once any of the following requirement met.
+ 1.SDK API disableBatteryQuery called by application, OR
+ 2.iPod/iPhone battery percentage >= 35%, OR
+ 3.SL22/SL42 battery voltage <= 3.4V
+ 4. Apple devices enter into suspend state.
+ The above situations are passive stop charging for Apple devices. if called, this disable battery query, that is active stop charging battery for Apple devices.
+
  */
 - (void)disableBatteryQuery;
 
 /**
- Enable HID Query
+ @brief This method active the current device's decoder activate HID function to let it working as HID mode.
+ 
+ HID(Human Interface Device)
+
+ Open Human interface device mode. In this mode, users can scan bar code into any input text controls.
+ This mode will waste of battery of Apple devices and SL22/SL42, for these devices never into into suspend.
+
+ How to open this feature should follow below steps:
+ 1. Initialize the PM protocol hardware.
+ 2. In PM protocol, call unLockHIDMode
+ 3. In PM protocol, call activated HID.
+ 
+ When you opened HID feature, user can not open the decoder protocol to receive scan barcode values into iOS application which base on CaptuvoSDK lib develop like(mPOS/PriceCheck/EasyDLDemo).
  */
 - (void)activateHID;
+
 /**
- Disable HID Query
- */
+ @brief This method requests the current device's decoder HID function switch to un-working.
+ 
+ When this method is called to request the current sled to close the HID function, it will switch to unactive HID mode.
+*/
 - (void)deActivateHID ;
 
 /**
- Open HID Query
+ @brief This method requests the current device's decoder HID function switch mode to un lock mode.
+ 
+ When this method is called to request the current sled, it will switch the sled from lock mode to unlock mode. When lock mode sled can not been set, else it been unlocked.
  */
 - (void)unLockHIDMode;
 
 /**
- Close HID Query
+ @brief This method requests the current device's decoder HID function switch mode to lock mode.
+ 
+ When this method is called to request the current sled, it will switch the sled from unlock mode to unlock mode to keep it locked status, else it easy been changed will cause HID can NOT working.
+ 
  */
 - (void)lockHIDMode;
 
 /**
- @brief This method requests the current HID Status of the device.
+ @brief This method requests the current device's decoder HID Status of the device.
 
- When this method is called to request the current HID State of the device. This data is returned with the <em>-(void)stateHID:(HIDCurStatus)status</em> delegate method. To track the HID status it is better to use the <em>-(HIDCurStatus)requestHIDStatus</em> method.
+ When this method is called to request the current HID State of the device. This data is returned with the <em>-(void)stateHID:(HIDCurStatus)status</em> delegate method. To track the HID status it is better to use the <em>-(void)requestHIDStatus</em> method.
  */
 
 - (void)requestHIDStatus;
 
 
-/**
- normal=YES--Normal Level, normal=NO---HIGH Level
- */
-- (void)esdSecurityQuery:(BOOL)normal;
+/*
+ @brief This method query the current device's decoder HID timeout value.
+ 
+ When this method is called to request the current HID timeout value. The async method <em>- (void)responseHIDTimeout:(NSInteger)timeout;</em> is delegate method will response user timeout value.
+*/
+- (void)queryHIDTimeout;
 
+/*
+ @brief This method requests the current device's HID setting timeout, the timeout means that the device using HID mode it will auto stop decoder for save battery of sled, when keep pressing 3 seconds of hard key of sled will wakeup of decoder.
+ 
+ The timeout value must >=30seconds and<65535seconds when user setting.
+ 
+ When this method is called to set the current HID setting timeout. It set successed or failed will post to user through the method<em>- (void)responseHIDChangedDetail:(NSString*)changedInfo ;</em> delegate method. 
+ To enable the HID mode and set timeout value to sled, it will save sled's battery when user hasn't any action in timeout value time, it will automatic enter into save power mode(Close decoder).
+ */
+- (void)setHIDTimeout:(int)timeout ;
+
+/**
+ @brief This method is used to enable the hard key.
+ 
+ This data is returned with the <em>-(void)triggerKey:(TriggerKeyStatus)status</em> delegate method
+ */
+-(void)enableTriggerKey;
+
+/**
+ @brief This method is used to disable the hard key.
+ 
+ This data is returned with the <em>-(void)triggerKey:(TriggerKeyStatus)status</em> delegate method
+ */
+-(void)disableTriggerKey;
+
+/**
+ @brief This method is used to requre the hard key status.
+ */
+-(TriggerKeyStatus)requestTriggerKeyStatus;
+
+
+// following API is just used in iphone6 and 6plus later.
+#pragma mark Cupertino Upgrade firmware
+
+/**
+**
+ @brief This method for iOS device's decoder start to send UPGRADE FIRMWARE data to sled.
+
+ Call this method will let IOS device start to Upgrade firmware, when this Method is called, it can NOT be interrupted and can NOT send any commands to sled, else the upgrade firmware will be broken, the sled will be blocked can NOT work again.
+
+ The file path is the absolute path should make the path can be accessed the file's content, else upgrade firmware method will fail.
+
+ */
+
+- (void)startUpgradefirmware:(NSString*)filePath;
+
+
+/*
+   Get Firmware file header information
+ 
+ Sled firmware header struct contain version information, size of firmware file, version, firmware type, build firmware date, time.
+ The firmware file header start address 0x26c
+ 
+ unsigned short ver;            // Version information indicator, always KEYBRD_INFO_BASE(2 Bytes)
+ unsigned char size;            // Size in bytes of this structure, always 0x34 byte (1 Byte)
+ unsigned char version[16];     // 63.00.NB.r49 (16 Bytes)
+ unsigned char type;            // Type of firmware: valid value 'b'/'m'/'u'(1 Byte)
+ unsigned char date[16];        // eg."May 14 2004" (16 Bytes)
+ unsigned char time[16];        // eg."18:00:00" (16 Bytes)
+ Above 16X3 + 2 + 1 + 1 = 52, length of header is 52
+
+ */
+-(SledFirmwareHeader*) getFirmwareHeader:(NSString*)filePath HONEYWELL_AVAILABLE_CAPTUVO(3.01);
+
+
+#pragma mark Cupertino Battery
+/**
+ @brief This method is for query Cupertino device battery detail information.
+ 
+ Cupertino battery has capability provide for user more information about the battery detail.
+ 
+ This battery information as below:
+ Valid data:-provide if the Cupertino battery is valid or not(YES/NO).
+ Percentage:-provide the current Cupertino battery percentage(%).
+ Remaining Capacity:-provide the Cupertino battery current remaining capacity(mAh)
+ Total Capacity:-provide the Cupertino battery total capacity(mAh).
+ Temperture:-provide the Cupertino battery temperure use Kelvin(K).
+ Voltage:-provide the Cupertino battery current voltage(V).
+ This method callback delegate method is the <em>-(void) responseBatteryDetailInformation:(cupertinoBatteryDetailInfo*)batteryInfo;</em>
+ */
+-(void) queryBatteryDetailInfo HONEYWELL_AVAILABLE_CAPTUVO(3.01);
+
+
+/**
+ @brief This method is set Cupertino battery charge for iOS device battery operate.
+ 
+CupertinoSDK provide this method for user to control the Cupertino battery charge for iOS device.
+ The cupertinoBatteryCharge object propertys setting can control the Cupertino battery charging for iOS device operate.
+ 1.enable= YES, Cupertino can charge for Apple device. enable=NO, Cupertino can NOT charge for Apple device.
+ 2.start: it means Apple device battery percentage is lower than "start" value, Cupertino battery start charging for Apple device.
+ 3.stop: it means Apple device battery percentage is higher than "stop" value, Cupertino battery stop charging for Apple device.
+ 4.sledminLimitPower: it means Cupertino battery percentage is too low to charging for Apple device.
+ 
+ The default value are: enable=YES, start=10%, stop=35%, sledminLimitPower=15%
+*/
+-(void) setBatteryChargingForAppleDevice:(cupertinoBatteryCharger*)charger HONEYWELL_AVAILABLE_CAPTUVO(3.01);
+
+
+/**
+ @brief This method is set current Cupertino MSR HID function activate or un-activate mode.
+ This method parameter activate = YES, enable MSR HID function; activate = NO, disable MSR HID function.
+ 
+ This method only for Cupertino devices, Captuvo device can NOT support.
+ */
+- (void)setMSRHID:(BOOL)activate ;
+
+/**
+ @brief This method is query current device HIS status, if it is activate or un-activate mode
+ 
+ This method callback delegate method is the <em>- (void)responseMSRHIDMode:(BOOL)isHID</em>
+ */
+- (void)queryMSRHIDMode;
+
+/**
+ @brief This method is used to set the led scheme, defaultScheme = yes that means try to set led to DefaultLedScheme, if defaultScheme = NO menas try to set led to AlternateLedScheme
+ 
+ This method callback delegate method is the <em>- (void)responseMSRHIDMode:(BOOL)isHID</em>
+ */
+- (void)setLedScheme:(BOOL)defaultScheme;
+
+
+
+#pragma end
 
 @end
-
-
-
