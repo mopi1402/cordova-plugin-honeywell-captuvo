@@ -3,14 +3,13 @@ Cordova Honeywell Captuvo Plugin
 
 This is a Cordova/Phonegap plugin to interact with Honeywell Captuvo sled for iPhones, iPod Touches and iPad Minis (https://www.honeywellaidc.com/en-US/Pages/Product.aspx?category=enterprise-sleds-for-apple-devices&cat=HSM&pid=CaptuvoSL22). The plugin works by interacting with the native SDK provided by Honeywell to handle barcode scans and magstripe reads.
 
-NOTE 1: the SL62 has a different SDK that needs to be swapped out in this plugin
 
-NOTE: this plugin includes version 2.13.611 of the SL42 SDK.  **You must independently agree to the EULA from HoneyWell.**
+NOTE: this plugin includes version 3.04.1425 of the SL62 SDK.  **You must independently agree to the EULA from HoneyWell.**
 
 =============
 
 This plugin is compatible with plugman.  To install, run the following from your project command line: 
-```$ cordova plugin add https://github.com/BlueFletch/cordova-plugin-honeywell-captuvo.git```
+```$ cordova plugin add https://github.com/mopi1402/cordova-plugin-honeywell-captuvo.git```
 
 
 ==============
